@@ -326,7 +326,21 @@ extern void     DAP_Setup (void);
 #ifndef DELAY_SLOW_CYCLES
 #define DELAY_SLOW_CYCLES       3U      // Number of cycles for one iteration
 #endif
-#if defined(__CC_ARM)
+#if defined(__riscv)
+/* RISC-V (WCH QingKe): the generic C loop below is an empty loop that GCC deletes at -O1+, which
+   silently disables SWD clock throttling. Use a volatile asm loop: `delay` iterations of
+   addi+bnez (~DELAY_SLOW_CYCLES each). delay==0 returns at once instead of wrapping 2^32 times. */
+__STATIC_FORCEINLINE void PIN_DELAY_SLOW (uint32_t delay) {
+  __asm__ volatile (
+    "beqz %0, 2f\n"
+    "1:\n"
+    "addi %0, %0, -1\n"
+    "bnez %0, 1b\n"
+    "2:"
+  : "+r" (delay) : : "memory"
+  );
+}
+#elif defined(__CC_ARM)
 __STATIC_FORCEINLINE void PIN_DELAY_SLOW (uint32_t delay) {
   uint32_t count = delay;
   while (--count);
