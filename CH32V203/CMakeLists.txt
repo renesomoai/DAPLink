@@ -20,7 +20,7 @@ set(DAP_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/../DAP/Source/UART.c)
 
 add_executable(DAPLink
-  src/main.c src/vcom_serial.c src/dap_xfer.c
+  src/main.c src/vcom_serial.c src/dap_xfer.c src/timestamp.c
   src/Startup/core_riscv.c src/Startup/system_ch32v20x.c src/Startup/startup_ch32v20x_D6.S
   ${PERIPH} ${USBLIB} ${USBUSR} ${DAP_SRC})
 
