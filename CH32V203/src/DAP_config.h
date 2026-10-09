@@ -305,6 +305,7 @@ of the same I/O port. The following SWDIO I/O Pin functions are provided:
 #define SWDIO_PORT          GPIOA
 #define SWDIO_PIN           GPIO_Pin_0
 #define SWDIO_PIN_INDEX     0
+#define SWCLK_PIN_INDEX     1
 
 #define JTAG_TCK_PORT       SWCLK_PORT
 #define JTAG_TCK_PIN        SWCLK_PIN
@@ -494,6 +495,27 @@ __STATIC_FORCEINLINE uint32_t PIN_SWDIO_IN_MSB (void) {
 __STATIC_FORCEINLINE uint32_t SW_PARITY32 (uint32_t v) {
   v ^= v >> 16; v ^= v >> 8; v ^= v >> 4; v &= 0xFU;
   return (0x6996U >> v) & 1U;
+}
+
+/** SWCLK self-calibration (DAP_CLOCK_CALIBRATE, see DAP.c/SW_DP.c).
+ * At boot the real SWD bit sequences are timed with the SysTick HCLK counter while SWDIO/SWCLK are configured as
+ * ANALOG inputs, so the pads do not move. SysTick is returned to its reset state afterwards (main() configures it later). */
+#define DAP_CLOCK_CALIBRATE 1
+__STATIC_FORCEINLINE void CAL_BEGIN (uint32_t s[2]) {
+  s[0] = SWCLK_PORT->CFGLR;
+  s[1] = SWCLK_PORT->OUTDR;
+  SWCLK_PORT->CFGLR = s[0] & ~((0xFU << (SWCLK_PIN_INDEX * 4U)) | (0xFU << (SWDIO_PIN_INDEX * 4U)));  /* analog */
+  SysTick->CTLR = 0x05U;      /* STE | STCLK(HCLK); no interrupt, no auto-reload: free-running 64-bit counter */
+}
+__STATIC_FORCEINLINE uint32_t CAL_COUNTER (void) {
+  return *(volatile uint32_t *)&SysTick->CNT;
+}
+__STATIC_FORCEINLINE void CAL_END (const uint32_t s[2]) {
+  SysTick->CTLR = 0U;
+  SysTick->SR   = 0U;
+  SysTick->CNT  = 0U;
+  SWCLK_PORT->OUTDR = s[1];
+  SWCLK_PORT->CFGLR = s[0];
 }
 
 /** SWDIO I/O pin: Switch to Output mode (used in SWD mode only).

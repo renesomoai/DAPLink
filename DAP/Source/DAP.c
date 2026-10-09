@@ -163,9 +163,73 @@ static uint8_t DAP_Info(uint8_t id, uint8_t *info) {
 }
 
 
+#ifdef DAP_CLOCK_CALIBRATE
+// SWCLK self-calibration. Fixed point x256, in CPU cycles.
+//   half-period(d) = a256/256 + b256/256 * d   (slow path, d = delay iterations)
+//   fast256/256                                  (fast path, no delay)
+typedef struct { uint32_t a256; uint32_t b256; uint32_t fast256; uint32_t ok; } DAP_Cal_t;
+DAP_Cal_t DAP_Cal;
+extern uint32_t SWD_CalibrateBitsSlow (uint32_t delay, uint32_t *rd);
+extern uint32_t SWD_CalibrateBitsFast (uint32_t *rd);
+
+void DAP_ClockCalibrate (void) {
+  uint32_t s[2], r1, r2, rf, w1, w2, wf, c1, c2, cf;
+  const uint32_t d1 = 2U, d2 = 34U;
+  CAL_BEGIN(s);
+  w1 = SWD_CalibrateBitsSlow(d1, &r1);
+  w2 = SWD_CalibrateBitsSlow(d2, &r2);
+  wf = SWD_CalibrateBitsFast(&rf);
+  CAL_END(s);
+  c1 = w1 + r1;                 // 64 bits = 128 half periods
+  c2 = w2 + r2;
+  cf = wf + rf;
+  DAP_Cal.ok = 0U;
+  if ((c2 > c1) && (cf != 0U)) {
+    DAP_Cal.b256   = ((c2 - c1) * 2U) / (d2 - d1);          // (c2-c1)/128 per d step, x256
+    DAP_Cal.a256   = (c1 * 2U) - (DAP_Cal.b256 * d1);       // c1/128 x256 minus d1 iterations
+    DAP_Cal.fast256 = cf * 2U;                              // cf/128 x256
+    // Sanity window: a delay iteration is a few cycles, a fast half period at least 2 (two stores) and at most a few dozen. Anything else
+    // (e.g. SysTick running at HCLK/8) means the measurement cannot be trusted: keep the legacy mapping.
+    if ((DAP_Cal.b256 >= 2U * 256U) && (DAP_Cal.b256 <= 12U * 256U) &&
+        ((c1 * 2U) > (DAP_Cal.b256 * d1)) &&
+        (DAP_Cal.fast256 >= (3U * 256U) / 2U) && (DAP_Cal.fast256 <= 60U * 256U)) {
+      DAP_Cal.ok = 1U;
+    }
+  }
+}
+
+// Map a requested SWJ clock to fast/slow path and delay iterations using the measured costs.
+static void DAP_SetClock (uint32_t clock) {
+  uint64_t t256 = ((uint64_t)CPU_CLOCK * 128U) / clock;      // target half period, cycles x256
+  uint64_t d256 = (t256 > DAP_Cal.a256) ? (t256 - DAP_Cal.a256) : 0U;
+  uint32_t d    = (uint32_t)((d256 + (DAP_Cal.b256 / 2U)) / DAP_Cal.b256);
+  if (d < 1U) {
+    uint64_t h1 = (uint64_t)DAP_Cal.a256 + DAP_Cal.b256;     // slowest-delay (d=1) slow path half period
+    uint64_t hf = DAP_Cal.fast256;
+    uint64_t df = (t256 > hf) ? (t256 - hf) : (hf - t256);
+    uint64_t ds = (t256 > h1) ? (t256 - h1) : (h1 - t256);
+    if (df <= ds) {
+      DAP_Data.fast_clock  = 1U;
+      DAP_Data.clock_delay = 1U;
+      return;
+    }
+    d = 1U;
+  }
+  if (d > 0xFFFFFFU) { d = 0xFFFFFFU; }
+  DAP_Data.fast_clock  = 0U;
+  DAP_Data.clock_delay = d;
+}
+
+// Delay loop iterations for n * (CPU_CLOCK / div) cycles, using the measured iteration cost.
+#define DAP_ITERS(n, div) ((uint32_t)(((uint64_t)(n) * (CPU_CLOCK / (div)) * 256U) / DAP_Cal.b256))
+#endif
+
 // Delay for specified time
 //    delay:  delay time in ms
 void Delayms(uint32_t delay) {
+#ifdef DAP_CLOCK_CALIBRATE
+  if (DAP_Cal.ok) { delay = DAP_ITERS(delay, 1000U); } else
+#endif
   delay *= ((CPU_CLOCK/1000U) + (DELAY_SLOW_CYCLES-1U)) / DELAY_SLOW_CYCLES;
   PIN_DELAY_SLOW(delay);
 }
@@ -181,6 +245,9 @@ static uint32_t DAP_Delay(const uint8_t *request, uint8_t *response) {
 
   delay  = (uint32_t)(*(request+0)) |
            (uint32_t)(*(request+1) << 8);
+#ifdef DAP_CLOCK_CALIBRATE
+  if (DAP_Cal.ok) { delay = DAP_ITERS(delay, 1000000U); } else
+#endif
   delay *= ((CPU_CLOCK/1000000U) + (DELAY_SLOW_CYCLES-1U)) / DELAY_SLOW_CYCLES;
 
   PIN_DELAY_SLOW(delay);
@@ -397,6 +464,14 @@ static uint32_t DAP_SWJ_Clock(const uint8_t *request, uint8_t *response) {
     *response = DAP_ERROR;
     return ((4U << 16) | 1U);
   }
+
+#ifdef DAP_CLOCK_CALIBRATE
+  if (DAP_Cal.ok) {
+    DAP_SetClock(clock);
+    *response = DAP_OK;
+    return ((4U << 16) | 1U);
+  }
+#endif
 
   if (clock >= MAX_SWJ_CLOCK(DELAY_FAST_CYCLES)) {
     DAP_Data.fast_clock  = 1U;
@@ -1804,4 +1879,11 @@ void DAP_Setup(void) {
 #endif
 
   DAP_SETUP();  // Device specific setup
+
+#ifdef DAP_CLOCK_CALIBRATE
+  DAP_ClockCalibrate();
+  if (DAP_Cal.ok) {
+    DAP_SetClock(DAP_DEFAULT_SWJ_CLOCK);
+  }
+#endif
 }

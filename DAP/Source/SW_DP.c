@@ -292,5 +292,34 @@ uint8_t  SWD_Transfer(uint32_t request, uint32_t *data) {
   }
 }
 
+#ifdef DAP_CLOCK_CALIBRATE
+// Time 32 write bits + 32 read bits with the same macros as the real transfer paths.
+//   Slow: PIN_DELAY_SLOW(_cd) per half period.  Fast: no delay.   Returns write cycles, read cycles in *rd.
+#undef  PIN_DELAY
+#define PIN_DELAY() PIN_DELAY_SLOW(_cd)
+uint32_t SWD_CalibrateBitsSlow (uint32_t _cd, uint32_t *rd) {
+  uint32_t v = 0xA5A5A5A5U, r, p, t0, t1, t2;
+  t0 = CAL_COUNTER();
+  SW_WRITE_DATA32(v, p);
+  t1 = CAL_COUNTER();
+  SW_READ_DATA32(r, p);
+  t2 = CAL_COUNTER();
+  *rd = t2 - t1;
+  return t1 - t0;
+}
+#undef  PIN_DELAY
+#define PIN_DELAY() PIN_DELAY_FAST()
+uint32_t SWD_CalibrateBitsFast (uint32_t *rd) {
+  uint32_t v = 0xA5A5A5A5U, r, p, t0, t1, t2;
+  t0 = CAL_COUNTER();
+  SW_WRITE_DATA32(v, p);
+  t1 = CAL_COUNTER();
+  SW_READ_DATA32(r, p);
+  t2 = CAL_COUNTER();
+  *rd = t2 - t1;
+  return t1 - t0;
+}
+#endif
+
 
 #endif  /* (DAP_SWD != 0) */
