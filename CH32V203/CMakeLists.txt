@@ -20,12 +20,12 @@ set(DAP_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/../DAP/Source/UART.c)
 
 add_executable(DAPLink
-  src/main.c src/vcom_serial.c src/dap_xfer.c src/timestamp.c
+  src/main.c src/vcom_serial.c src/dap_xfer.c src/timestamp.c src/swo_usart.c
   src/Startup/core_riscv.c src/Startup/system_ch32v20x.c src/Startup/startup_ch32v20x_D6.S
   ${PERIPH} ${USBLIB} ${USBUSR} ${DAP_SRC})
 
 target_include_directories(DAPLink PRIVATE
-  src src/Startup src/Peripheral src/USBLib src/USBUsr ../DAP/Include)
+  src src/Startup src/Peripheral src/USBLib src/USBUsr src/CMSIS_Driver ../DAP/Include)
 target_compile_definitions(DAPLink PRIVATE CH32V20x_D6 STD_GCC)
 if(DAP_FW_V1)
   target_compile_definitions(DAPLink PRIVATE DAP_FW_V1)
