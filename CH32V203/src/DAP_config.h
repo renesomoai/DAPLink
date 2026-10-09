@@ -465,6 +465,15 @@ __STATIC_FORCEINLINE void     PIN_SWDIO_OUT     (uint32_t bit) {
   else        SWDIO_PORT->BCR  = SWDIO_PIN;
 }
 
+/** Optional fast path (used by SW_DP.c when defined): drive SWDIO to `bit` AND pull SWCLK low in ONE
+store. Requires SWCLK and SWDIO on the same GPIO port (both on GPIOA here). BSHR: [15:0] set, [31:16] reset.
+Branch-free: the shift picks the set half (0) or the reset half (16) for the SWDIO bit. */
+__STATIC_FORCEINLINE void     PIN_SWDIO_OUT_SWCLK_CLR (uint32_t bit) {
+  SWDIO_PORT->BSHR = ((uint32_t)SWCLK_PIN << 16) | ((uint32_t)SWDIO_PIN << (((bit & 1U) ^ 1U) << 4));
+}
+
+#define PIN_SWDIO_OUT_SWCLK_CLR PIN_SWDIO_OUT_SWCLK_CLR   /* advertise the fast path to SW_DP.c (#ifdef) */
+
 /** SWDIO I/O pin: Switch to Output mode (used in SWD mode only).
 Configure the SWDIO DAP hardware I/O pin to output mode. This function is
 called prior \ref PIN_SWDIO_OUT function calls.

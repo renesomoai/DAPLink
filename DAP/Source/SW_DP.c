@@ -40,12 +40,21 @@
   PIN_SWCLK_SET();                      \
   PIN_DELAY()
 
+#ifdef PIN_SWDIO_OUT_SWCLK_CLR
+/* Port-specific fast path: data + falling edge in a single GPIO store (see DAP_config.h). */
+#define SW_WRITE_BIT(bit)               \
+  PIN_SWDIO_OUT_SWCLK_CLR(bit);         \
+  PIN_DELAY();                          \
+  PIN_SWCLK_SET();                      \
+  PIN_DELAY()
+#else
 #define SW_WRITE_BIT(bit)               \
   PIN_SWDIO_OUT(bit);                   \
   PIN_SWCLK_CLR();                      \
   PIN_DELAY();                          \
   PIN_SWCLK_SET();                      \
   PIN_DELAY()
+#endif
 
 #define SW_READ_BIT(bit)                \
   PIN_SWCLK_CLR();                      \
