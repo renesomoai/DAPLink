@@ -27,6 +27,9 @@
  
 #include "DAP_config.h"
 #include "DAP.h"
+#ifdef DAP_VTREF_SENSE
+#include "target_power.h"
+#endif
 
 //**************************************************************************************************
 /** 
@@ -51,15 +54,19 @@ uint32_t DAP_ProcessVendorCommand(const uint8_t *request, uint8_t *response) {
   *response++ = *request;        // copy Command ID
 
   switch (*request++) {          // first byte in request is Command ID
-    case ID_DAP_Vendor0:
-#if 0                            // example user command
-      num += 1U << 16;           // increment request count
-      if (*request == 1U) {      // when first command data byte is 1
-        *response++ = 'X';       // send 'X' as response
-        num++;                   // increment response count
-      }
-#endif
+#ifdef DAP_VTREF_SENSE
+    case ID_DAP_Vendor0: {       // VTREF sense: response = [id, status, mV lo, mV hi]; status 1 = VTREF >= 1.7 V, 0 = below, 0xFF = ADC error
+      uint16_t mv = target_vtref_mv();
+      *response++ = (mv == VTREF_MV_ERROR) ? 0xFFU : (mv >= VTREF_MV_PRESENT_MIN);
+      *response++ = (uint8_t)mv;
+      *response++ = (uint8_t)(mv >> 8);
+      num += 3U;
       break;
+    }
+#else
+    case ID_DAP_Vendor0:  break;
+#endif
+
 
     case ID_DAP_Vendor1:  break;
     case ID_DAP_Vendor2:  break;

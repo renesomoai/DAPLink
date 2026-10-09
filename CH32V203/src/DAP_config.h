@@ -327,10 +327,12 @@ of the same I/O port. The following SWDIO I/O Pin functions are provided:
 #define nRESET_PORT         GPIOA
 #define nRESET_PIN          GPIO_Pin_4
 
-#define LED_CONNECTED_PORT  GPIOA
-#define LED_CONNECTED_PIN   GPIO_Pin_5
-#define LED_RUNNING_PORT    GPIOA
-#define LED_RUNNING_PIN     GPIO_Pin_5
+/* T1: LED_CONNECTED_DRV = PB10, LED_RUNNING_DRV = PB11 (active high through 1k to the LED anode); PA5 stays free for J4 */
+#define LED_CONNECTED_PORT  GPIOB
+#define LED_CONNECTED_PIN   GPIO_Pin_10
+#define LED_RUNNING_PORT    GPIOB
+#define LED_RUNNING_PIN     GPIO_Pin_11
+#define DAP_VTREF_SENSE     1   /* vendor command 0x80 reads VTREF on PB1 (ADC1_IN9), see target_power.c */
 
 /** Setup JTAG I/O pins: TCK, TMS, TDI, TDO, nTRST, and nRESET.
 Configures the DAP Hardware I/O pins for JTAG mode:
@@ -702,6 +704,7 @@ Status LEDs. In detail the operation of Hardware I/O and LED pins are enabled an
 */
 __STATIC_INLINE void DAP_SETUP (void) {
   PORT_OFF();
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
 
   GPIO_InitTypeDef GPIO_InitStruct;
 
