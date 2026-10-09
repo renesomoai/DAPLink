@@ -190,14 +190,14 @@ const uint8_t USBD_StringLangID[] = {
 const uint8_t USBD_StringVendor[] = {
 	USBD_SIZE_STRING_VENDOR,    
 	STRING_DESCRIPTOR,
-	'X', 0, 'I', 0, 'V', 0, 'N', 0, '1', 0, '9', 0, '8', 0, '7', 0
+	'O', 0, 'n', 0, 'B', 0, 'o', 0, 'a', 0, 'r', 0, 'd', 0, 'D', 0, 'A', 0, 'P', 0
 };
 
 
 const uint8_t USBD_StringProduct[] = {
     USBD_SIZE_STRING_PRODUCT,
     STRING_DESCRIPTOR,
-    'X', 0, 'V', 0, '-', 0, 'L', 0, 'i', 0, 'n', 0, 'k', 0, ' ', 0, 'C', 0, 'M', 0, 'S', 0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0
+    'O', 0, 'n', 0, 'B', 0, 'o', 0, 'a', 0, 'r', 0, 'd', 0, 'D', 0, 'A', 0, 'P', 0, ' ', 0, 'C', 0, 'M', 0, 'S', 0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0
 };
 
 
@@ -211,7 +211,7 @@ uint8_t USBD_StringSerial[] = {
 const uint8_t USBD_StringInterface[] = {
     USBD_SIZE_STRING_PRODUCT,
     STRING_DESCRIPTOR,
-    'X', 0, 'V', 0, '-', 0, 'L', 0, 'i', 0, 'n', 0, 'k', 0, ' ', 0, 'C', 0, 'M', 0, 'S', 0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0
+    'O', 0, 'n', 0, 'B', 0, 'o', 0, 'a', 0, 'r', 0, 'd', 0, 'D', 0, 'A', 0, 'P', 0, ' ', 0, 'C', 0, 'M', 0, 'S', 0, 'I', 0, 'S', 0, '-', 0, 'D', 0, 'A', 0, 'P', 0
 };
 
 
