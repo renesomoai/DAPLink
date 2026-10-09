@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 project(DAPLink_CH32V203 C ASM)
 
 # Chip: CH32V203C8T6 = 64 KB flash / 20 KB RAM (WCH family "D6" peripheral set).
+set(ONBOARDDAP_USB_VID "0x1209" CACHE STRING "USB VID (default: pid.codes shared test ID, private bench use only)")
+set(ONBOARDDAP_USB_PID "0x0001" CACHE STRING "USB PID (default: pid.codes shared test ID)")
 option(DAP_FW_V1 "Build CMSIS-DAP v1 (HID) instead of v2 (WinUSB bulk)" OFF)
 set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/link_c8t6.ld CACHE FILEPATH "Linker script")
 
@@ -27,6 +29,7 @@ add_executable(DAPLink
 target_include_directories(DAPLink PRIVATE
   src src/Startup src/Peripheral src/USBLib src/USBUsr src/CMSIS_Driver ../DAP/Include)
 target_compile_definitions(DAPLink PRIVATE CH32V20x_D6 STD_GCC)
+target_compile_definitions(DAPLink PRIVATE ONBOARDDAP_USB_VID=${ONBOARDDAP_USB_VID} ONBOARDDAP_USB_PID=${ONBOARDDAP_USB_PID})
 if(DAP_FW_V1)
   target_compile_definitions(DAPLink PRIVATE DAP_FW_V1)
 endif()

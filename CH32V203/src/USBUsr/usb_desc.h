@@ -15,12 +15,17 @@
 #include "ch32v20x.h"
 
 
-#define USBD_VID    0x1A86
-#ifdef DAP_FW_V1
-#define USBD_PID    0x5021
-#else
-#define USBD_PID    0x7021
+/* USB identity. 0x1A86 belongs to WCH, so it is NOT used. Default = pid.codes shared test ID 1209:0001, valid for
+   private bench use only (not for distribution). Override with -DONBOARDDAP_USB_VID=.. -DONBOARDDAP_USB_PID=.. (CMake
+   options of the same name) once a PID is allocated. */
+#ifndef ONBOARDDAP_USB_VID
+#define ONBOARDDAP_USB_VID  0x1209
 #endif
+#ifndef ONBOARDDAP_USB_PID
+#define ONBOARDDAP_USB_PID  0x0001
+#endif
+#define USBD_VID    ONBOARDDAP_USB_VID
+#define USBD_PID    ONBOARDDAP_USB_PID
 
 
 /* Define EP number */
