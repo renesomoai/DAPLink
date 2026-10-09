@@ -474,6 +474,28 @@ __STATIC_FORCEINLINE void     PIN_SWDIO_OUT_SWCLK_CLR (uint32_t bit) {
 
 #define PIN_SWDIO_OUT_SWCLK_CLR PIN_SWDIO_OUT_SWCLK_CLR   /* advertise the fast path to SW_DP.c (#ifdef) */
 
+/** Unrolled 32-bit data phase helpers (SW_UNROLL_DATA, used by SW_DP.c).
+ * Valid because SWDIO and SWCLK are on the same GPIO port and SWDIO is pin 0 (see DAP_config.h pin map). */
+#define SW_UNROLL_DATA 1
+
+/* BSHR word that drives SWDIO to bit `i` of `v` and pulls SWCLK low. Branch-free: m = 0 or 0xFFFFFFFF. */
+__STATIC_FORCEINLINE uint32_t PIN_SWDIO_BSHR_BIT (uint32_t v, uint32_t i) {
+  uint32_t m = (uint32_t)((int32_t)(v << (31U - i)) >> 31);
+  return (((uint32_t)SWCLK_PIN | (uint32_t)SWDIO_PIN) << 16) ^ (m & ((uint32_t)SWDIO_PIN | ((uint32_t)SWDIO_PIN << 16)));
+}
+__STATIC_FORCEINLINE void PIN_SWCLK_PORT_BSHR (uint32_t w) {
+  SWCLK_PORT->BSHR = w;
+}
+/* SWDIO input moved to bit 31 (all other pins shifted out when SWDIO_PIN_INDEX == 0). */
+__STATIC_FORCEINLINE uint32_t PIN_SWDIO_IN_MSB (void) {
+  return ((uint32_t)SWDIO_PORT->INDR << (31U - SWDIO_PIN_INDEX)) & 0x80000000U;
+}
+/* Even parity of a 32-bit word (1 if an odd number of ones). */
+__STATIC_FORCEINLINE uint32_t SW_PARITY32 (uint32_t v) {
+  v ^= v >> 16; v ^= v >> 8; v ^= v >> 4; v &= 0xFU;
+  return (0x6996U >> v) & 1U;
+}
+
 /** SWDIO I/O pin: Switch to Output mode (used in SWD mode only).
 Configure the SWDIO DAP hardware I/O pin to output mode. This function is
 called prior \ref PIN_SWDIO_OUT function calls.

@@ -63,6 +63,19 @@
   PIN_SWCLK_SET();                      \
   PIN_DELAY()
 
+#ifdef SW_UNROLL_DATA
+/* Port-specific unrolled data phase (see DAP_config.h): no loop counter, no per-bit parity, branch-free bit values. */
+#define SW_REP8(X, b) X((b)+0) X((b)+1) X((b)+2) X((b)+3) X((b)+4) X((b)+5) X((b)+6) X((b)+7)
+#define SW_REP32(X) SW_REP8(X,0) SW_REP8(X,8) SW_REP8(X,16) SW_REP8(X,24)
+#define SW_WB_X(i) PIN_SWCLK_PORT_BSHR(PIN_SWDIO_BSHR_BIT(_wv, i)); PIN_DELAY(); PIN_SWCLK_SET(); PIN_DELAY();
+#define SW_RB_X(i) PIN_SWCLK_CLR(); PIN_DELAY(); _rv = (_rv >> 1) | PIN_SWDIO_IN_MSB(); PIN_SWCLK_SET(); PIN_DELAY();
+#define SW_WRITE_DATA32(val, parity) do { uint32_t _wv = (val); (parity) = SW_PARITY32(_wv); SW_REP32(SW_WB_X) } while (0)
+#define SW_READ_DATA32(val, parity) do { uint32_t _rv = 0U; SW_REP32(SW_RB_X) (val) = _rv; (parity) = SW_PARITY32(_rv); } while (0)
+#else
+#define SW_READ_DATA32(val, parity) do { uint32_t _n, _b; (val) = 0U; (parity) = 0U; for (_n = 32U; _n; _n--) { SW_READ_BIT(_b); (parity) += _b; (val) >>= 1; (val) |= _b << 31; } } while (0)
+#define SW_WRITE_DATA32(val, parity) do { uint32_t _n; (parity) = 0U; for (_n = 32U; _n; _n--) { SW_WRITE_BIT(val); (parity) += (val); (val) >>= 1; } } while (0)
+#endif
+
 #define PIN_DELAY() PIN_DELAY_SLOW(DAP_Data.clock_delay)
 
 
@@ -188,14 +201,7 @@ static uint8_t SWD_Transfer##speed (uint32_t request, uint32_t *data) {         
     /* Data transfer */                                                         \
     if (request & DAP_TRANSFER_RnW) {                                           \
       /* Read data */                                                           \
-      val = 0U;                                                                 \
-      parity = 0U;                                                              \
-      for (n = 32U; n; n--) {                                                   \
-        SW_READ_BIT(bit);               /* Read RDATA[0:31] */                  \
-        parity += bit;                                                          \
-        val >>= 1;                                                              \
-        val  |= bit << 31;                                                      \
-      }                                                                         \
+      SW_READ_DATA32(val, parity);          /* Read RDATA[0:31] */              \
       SW_READ_BIT(bit);                 /* Read Parity */                       \
       if ((parity ^ bit) & 1U) {                                                \
         ack = DAP_TRANSFER_ERROR;                                               \
@@ -214,12 +220,7 @@ static uint8_t SWD_Transfer##speed (uint32_t request, uint32_t *data) {         
       PIN_SWDIO_OUT_ENABLE();                                                   \
       /* Write data */                                                          \
       val = *data;                                                              \
-      parity = 0U;                                                              \
-      for (n = 32U; n; n--) {                                                   \
-        SW_WRITE_BIT(val);              /* Write WDATA[0:31] */                 \
-        parity += val;                                                          \
-        val >>= 1;                                                              \
-      }                                                                         \
+      SW_WRITE_DATA32(val, parity);         /* Write WDATA[0:31] */             \
       SW_WRITE_BIT(parity);             /* Write Parity Bit */                  \
     }                                                                           \
     /* Capture Timestamp */                                                     \
