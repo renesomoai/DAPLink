@@ -89,13 +89,21 @@ This information includes:
 /// This configuration settings is used to optimize the communication performance with the
 /// debugger and depends on the USB peripheral. Typical vales are 64 for Full-speed USB HID or WinUSB,
 /// 1024 for High-speed USB HID and 512 for High-speed USB WinUSB.
-#define DAP_PACKET_SIZE         64U             ///< Specifies Packet Size in bytes.
+#ifdef DAP_FW_V1
+#define DAP_PACKET_SIZE         64U             ///< HID report size
+#else
+#define DAP_PACKET_SIZE         512U            ///< v2 bulk: requests/responses span several 64 B USB packets (dap_xfer.c)
+#endif
 
 /// Maximum Package Buffers for Command and Response data.
 /// This configuration settings is used to optimize the communication performance with the
 /// debugger and depends on the USB peripheral. For devices with limited RAM or USB buffer the
 /// setting can be reduced (valid range is 1 .. 255).
+#ifdef DAP_FW_V1
 #define DAP_PACKET_COUNT        8U              ///< Specifies number of packets buffered.
+#else
+#define DAP_PACKET_COUNT        4U              ///< v2: depth 4 reaches the SWD ceiling in the pipeline model (docs/07)
+#endif
 
 /// Indicate that UART Serial Wire Output (SWO) trace is available.
 /// This information is returned by the command \ref DAP_Info as part of <b>Capabilities</b>.

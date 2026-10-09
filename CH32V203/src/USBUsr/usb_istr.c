@@ -199,9 +199,14 @@ void EP1_OUT_Callback(void)
 {
     uint8_t rcvbuff[64] = {0};
 
-    USB_SIL_Read(EP1_OUT, rcvbuff);
+    uint32_t rcvlen = USB_SIL_Read(EP1_OUT, rcvbuff);
 
+#ifdef DAP_FW_V1
+    (void)rcvlen;
     HID_GetOutReport(rcvbuff, 64);
+#else
+    HID_GetOutReport(rcvbuff, rcvlen);       /* real length: packets may be short or zero-length (ZLP) */
+#endif
 
     SetEPRxStatus(ENDP1, EP_RX_VALID);
 }
@@ -226,6 +231,8 @@ void EP3_OUT_Callback(void)
 /***************************************************************/
 #include "DAP_config.h"
 #include "DAP.h"
+
+#ifdef DAP_FW_V1
 
 static volatile uint8_t  USB_RequestFull;       // Request  Buffer Full Flag
 static volatile uint32_t USB_RequestIn;         // Request  Buffer In  Index
@@ -331,3 +338,53 @@ void HID_SetInReport(void)
         USB_ResponseIdle = 1;
     }
 }
+#else   /* CMSIS-DAP v2 (bulk): requests/responses of up to DAP_PACKET_SIZE bytes over 64 B packets, see dap_xfer.c */
+
+#include "dap_xfer.h"
+
+static volatile uint8_t tx_busy;                // an IN packet is in flight (or about to be)
+
+// Send the next IN packet if any. Called from the IN-complete interrupt, or from the main loop with IRQs masked.
+static void ep1_tx_kick(void)
+{
+    const uint8_t *p;
+    int32_t n = dap_tx_next(&p);
+
+    if(n >= 0)
+    {
+        USB_SIL_Write(EP1_IN, (uint8_t *)p, (uint32_t)n);       // n == 0 is a zero-length packet
+        SetEPTxValid(ENDP1);
+        tx_busy = 1;
+    }
+    else
+    {
+        tx_busy = 0;
+    }
+}
+
+uint8_t usbd_hid_process(void)
+{
+    uint32_t work = dap_xfer_process();
+
+    if(!tx_busy)
+    {
+        __disable_irq();
+        if(!tx_busy)
+            ep1_tx_kick();
+        __enable_irq();
+    }
+
+    return (uint8_t)work;
+}
+
+void HID_GetOutReport(uint8_t * buf, uint32_t len)
+{
+    dap_rx_feed(buf, len);                      // interrupt context
+}
+
+void HID_SetInReport(void)
+{
+    ep1_tx_kick();                              // interrupt context: previous IN packet delivered
+}
+
+#endif  /* DAP_FW_V1 */
