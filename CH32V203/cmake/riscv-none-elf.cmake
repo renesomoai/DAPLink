@@ -1,0 +1,21 @@
+# Toolchain file for xPack riscv-none-elf-gcc (WCH QingKe V4B/V4C, RV32IMAC).
+# Usage: cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/riscv-none-elf.cmake \
+#              -DRISCV_GCC_BIN=<path to xpack-riscv-none-elf-gcc-*/bin>
+set(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_PROCESSOR riscv32)
+if(NOT RISCV_GCC_BIN AND DEFINED ENV{RISCV_GCC_BIN})
+  set(RISCV_GCC_BIN $ENV{RISCV_GCC_BIN})
+endif()
+if(RISCV_GCC_BIN)
+  set(_p "${RISCV_GCC_BIN}/riscv-none-elf-")
+else()
+  set(_p "riscv-none-elf-")
+endif()
+if(CMAKE_HOST_WIN32)
+  set(_exe ".exe")
+endif()
+set(CMAKE_C_COMPILER   ${_p}gcc${_exe})
+set(CMAKE_ASM_COMPILER ${_p}gcc${_exe})
+set(CMAKE_OBJCOPY      ${_p}objcopy${_exe} CACHE FILEPATH "")
+set(CMAKE_SIZE         ${_p}size${_exe} CACHE FILEPATH "")
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)

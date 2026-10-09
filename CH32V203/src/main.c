@@ -1,5 +1,6 @@
 #include "ch32v20x.h"
 #include "usb_lib.h"
+#include "irq_attr.h"
 #include "usb_istr.h"
 
 #include "DAP.h"
@@ -50,7 +51,7 @@ void SysTick_Config(uint32_t ticks)
 }
 
 
-void SysTick_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void SysTick_Handler(void) WCH_IRQ_FAST;
 void SysTick_Handler(void)
 {
     SysTick->SR = 0;
@@ -98,8 +99,8 @@ void USB_Config(void)
 }
 
 
-void USB_LP_CAN1_RX0_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
-void USBWakeUp_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void USB_LP_CAN1_RX0_IRQHandler(void) WCH_IRQ_FAST;
+void USBWakeUp_IRQHandler(void) WCH_IRQ_FAST;
 
 
 void USB_LP_CAN1_RX0_IRQHandler(void)
