@@ -30,6 +30,9 @@
 #ifdef DAP_VTREF_SENSE
 #include "target_power.h"
 #endif
+#ifdef DAP_BOOT_REQUEST
+#include "bootloader_entry.h"
+#endif
 #ifdef DAP_STATS
 #include "dap_xfer.h"
 #include "vcom_serial.h"
@@ -83,7 +86,14 @@ uint32_t DAP_ProcessVendorCommand(const uint8_t *request, uint8_t *response) {
 #else
     case ID_DAP_Vendor1:  break;
 #endif
+#ifdef DAP_BOOT_REQUEST
+    case ID_DAP_Vendor2:         // request [0x82, method]: reboot into the WCH bootloader ~100 ms after the response (needs the BOOT0 RC bodge)
+      num += 1U << 16;
+      bootloader_request(*request);
+      break;
+#else
     case ID_DAP_Vendor2:  break;
+#endif
     case ID_DAP_Vendor3:  break;
     case ID_DAP_Vendor4:  break;
     case ID_DAP_Vendor5:  break;

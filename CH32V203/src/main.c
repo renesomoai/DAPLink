@@ -14,6 +14,7 @@
 
 
 extern uint8_t usbd_hid_process(void);
+#include "bootloader_entry.h"
 
 volatile uint32_t SysTick_ms = 0;
 
@@ -35,6 +36,8 @@ int main(void)
 	    usbd_hid_process();
 
 	    VCOM_TransferData();
+
+	    bootloader_poll();
 	}
 }
 
