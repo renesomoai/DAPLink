@@ -49,7 +49,13 @@ const uint8_t  USBD_ConfigDescriptor[] = {
     INTERFACE_DESCRIPTOR,               // bDescriptorType
     0x00,                               // bInterfaceNumber
     0x00,                               // bAlternateSetting
+#ifdef DAP_FW_V1
     0x02,                               // bNumEndpoints
+#elif (SWO_EP_ENABLED == 0)
+    0x02,                               // bNumEndpoints: bulk OUT, bulk IN (SWO via DAP_SWO_Data polling)
+#else
+    0x03,                               // bNumEndpoints: bulk OUT, bulk IN, SWO streaming bulk IN
+#endif
 #ifdef DAP_FW_V1
     0x03,                               // bInterfaceClass
 #else
@@ -94,6 +100,16 @@ const uint8_t  USBD_ConfigDescriptor[] = {
 #endif
     HID_INT_IN_SZ, 0x00,                // wMaxPacketSize
     1,                                  // bInterval
+
+#if (SWO_EP_ENABLED != 0)
+    // EP Descriptor: SWO streaming (CMSIS-DAP v2: the third endpoint of the DAP interface, bulk IN)
+    USBD_SIZE_ENDPOINT_DESC,            // bLength
+    ENDPOINT_DESCRIPTOR,                // bDescriptorType
+    SWO_BULK_IN_EP,                     // bEndpointAddress
+    USB_EPT_DESC_BULK,                  // bmAttributes
+    SWO_BULK_IN_SZ, 0x00,               // wMaxPacketSize
+    0,                                  // bInterval
+#endif
 
     // Interface Association Descriptor (IAD)
     0x08,                               // bLength

@@ -256,6 +256,16 @@ void USBD_Reset(void)
     _ClearDTOG_TX(ENDP3);
     _ClearDTOG_RX(ENDP3);
 
+#if (SWO_EP_ENABLED != 0)
+    /* Initialize Endpoint 4: SWO streaming (bulk IN) */
+    SetEPType(ENDP4, EP_BULK);
+    SetEPTxAddr(ENDP4, ENDP4_TXADDR);
+    SetEPTxCount(ENDP4, 0);
+    SetEPTxStatus(ENDP4, EP_TX_NAK);
+    SetEPRxStatus(ENDP4, EP_RX_DIS);
+    _ClearDTOG_TX(ENDP4);
+#endif
+
     SetDeviceAddress(0);
 
     bDeviceState = ATTACHED;

@@ -295,6 +295,7 @@ extern uint32_t SWO_Data           (const uint8_t *request, uint8_t *response);
 extern void     SWO_QueueTransfer    (uint8_t *buf, uint32_t num);
 extern void     SWO_AbortTransfer    (void);
 extern void     SWO_TransferComplete (void);
+extern void     SWO_Task             (void);   // bare-metal: call from the main loop (replaces the SWO thread)
 
 extern uint32_t SWO_Mode_UART     (uint32_t enable);
 extern uint32_t SWO_Baudrate_UART (uint32_t baudrate);

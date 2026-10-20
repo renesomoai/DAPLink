@@ -222,6 +222,15 @@ void EP3_IN_Callback(void)
 }
 
 
+#if (SWO_EP_ENABLED != 0)
+void SWO_EP_InComplete(void);
+void EP4_IN_Callback(void)
+{
+    SWO_EP_InComplete();                     /* SWO streaming: next packet of the transfer, or transfer complete */
+}
+#endif
+
+
 void EP3_OUT_Callback(void)
 {
     Vcom.out_bytes = USB_SIL_Read(EP3_OUT, (uint8_t *)Vcom.out_buff);

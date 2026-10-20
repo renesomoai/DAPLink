@@ -3,6 +3,7 @@
 #include "irq_attr.h"
 #include "usb_istr.h"
 
+#include "DAP_config.h"
 #include "DAP.h"
 #include "vcom_serial.h"
 
@@ -38,6 +39,12 @@ int main(void)
 	    VCOM_TransferData();
 
 	    bootloader_poll();
+
+#if (SWO_STREAM != 0)
+	    __disable_irq();                  /* SWO_Task() is also called from the endpoint-4 interrupt: keep them exclusive */
+	    SWO_Task();                       /* SWO streaming endpoint: queue the next trace block */
+	    __enable_irq();
+#endif
 	}
 }
 

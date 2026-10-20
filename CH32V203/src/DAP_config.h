@@ -120,10 +120,16 @@ This information includes:
 #define SWO_MANCHESTER          0               ///< SWO Manchester:  1 = available, 0 = not available.
 
 /// SWO Trace Buffer Size.
-#define SWO_BUFFER_SIZE         2048U           ///< SWO Trace Buffer Size in bytes (must be 2^n).
+#define SWO_BUFFER_SIZE         4096U           ///< SWO Trace Buffer Size in bytes (must be 2^n).
 
 /// SWO Streaming Trace.
-#define SWO_STREAM              0               ///< SWO Streaming Trace: 1 = available, 0 = not available.
+#include "swo_ep_config.h"
+#if (SWO_EP_ENABLED == 0)
+#define SWO_STREAM              0               ///< SWO Streaming Trace: off (DAP v1 or ONBOARDDAP_NO_SWO_ENDPOINT): SWO via DAP_SWO_Data polling.
+#else
+#define SWO_STREAM              1               ///< SWO Streaming Trace (CMSIS-DAP v2 transport 2, bulk IN endpoint 0x84, swo_usb.c).
+#define USB_BLOCK_SIZE          64U             ///< SWO.c: trace block handed to the endpoint = one full-speed bulk packet (low latency).
+#endif
 
 /// Clock frequency of the Test Domain Timer. Timer value is returned with \ref TIMESTAMP_GET.
 #define TIMESTAMP_CLOCK         144000000U      ///< Timestamp clock in Hz (= HCLK, SysTick; see timestamp.c).

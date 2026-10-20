@@ -31,9 +31,9 @@
 #include "Driver_USART.h"
 #endif
 #if (SWO_STREAM != 0)
-#include "cmsis_os2.h"
-#define   osObjectsExternal
-#include "osObjects.h"
+/* Bare-metal build (no RTOS): the original SWO thread is the SWO_Task() polled from the main loop; "thread flags" are a flag. */
+static volatile uint8_t SWO_TaskFlag = 0U;
+#define SWO_TaskWake()   (SWO_TaskFlag = 1U)
 #endif
 
 #if (SWO_STREAM != 0)
@@ -60,7 +60,9 @@ static uint8_t USART_Ready = 0U;
 
 #define SWO_STREAM_TIMEOUT      50U     /* Stream timeout in ms */
 
-#define USB_BLOCK_SIZE          512U    /* USB Block Size */
+#ifndef USB_BLOCK_SIZE
+#define USB_BLOCK_SIZE          512U    /* USB Block Size (DAP_config.h may override: 64 = full-speed bulk packet, lower latency) */
+#endif
 #define TRACE_BLOCK_SIZE        64U     /* Trace Block Size (2^n: 32...512) */
 
 // Trace State
@@ -93,7 +95,6 @@ static uint8_t  GetTraceStatus (void);
 static void     SetTraceError  (uint8_t flag);
 
 #if (SWO_STREAM != 0)
-extern osThreadId_t      SWO_ThreadId;
 static volatile uint8_t  TransferBusy = 0U; /* Transfer Busy Flag */
 static          uint32_t TransferSize;      /* Current Transfer Size */
 #endif
@@ -133,7 +134,7 @@ static void USART_Callback (uint32_t event) {
 #if (SWO_STREAM != 0)
     if (TraceTransport == 2U) {
       if (count >= (USB_BLOCK_SIZE - (index_o & (USB_BLOCK_SIZE - 1U)))) {
-        osThreadFlagsSet(SWO_ThreadId, 1U);
+        SWO_TaskWake();
       }
     }
 #endif
@@ -593,7 +594,7 @@ uint32_t SWO_Control (const uint8_t *request, uint8_t *response) {
       TraceStatus = active;
 #if (SWO_STREAM != 0)
       if (TraceTransport == 2U) {
-        osThreadFlagsSet(SWO_ThreadId, 1U);
+        SWO_TaskWake();
       }
 #endif
     }
@@ -739,54 +740,67 @@ void SWO_TransferComplete (void) {
   TraceIndexO += TransferSize;
   TransferBusy = 0U;
   ResumeTrace();
-  osThreadFlagsSet(SWO_ThreadId, 1U);
+  SWO_TaskWake();
 }
 
-// SWO Thread
-__NO_RETURN void SWO_Thread (void *argument) {
-  uint32_t timeout;
+// SWO task: moves captured trace blocks to the streaming endpoint (was the RTOS thread of the reference implementation).
+// Call it from the main loop; it never blocks. A wake flag (new data / transfer done / capture start) or the 50 ms stream
+// timeout since the last pass lets it queue the next USB transfer (the timeout flushes a partial block).
+void SWO_Task (void) {
+  static uint32_t last;
   uint32_t flags;
+  uint32_t timed_out;
   uint32_t count;
   uint32_t index;
   uint32_t i, n;
-  (void)   argument;
+  uint32_t now;
 
-  timeout = osWaitForever;
+  now = TIMESTAMP_GET();
+  flags = SWO_TaskFlag;
+  SWO_TaskFlag = 0U;
 
-  for (;;) {
-    flags = osThreadFlagsWait(1U, osFlagsWaitAny, timeout);
-    if (TraceStatus & DAP_SWO_CAPTURE_ACTIVE) {
-      timeout = SWO_STREAM_TIMEOUT;
+  if (TraceStatus & DAP_SWO_CAPTURE_ACTIVE) {
+    if (flags != 0U) {
+      timed_out = 0U;
+      last = now;
+    } else if ((uint32_t)(now - last) >= (SWO_STREAM_TIMEOUT * (TIMESTAMP_CLOCK / 1000U))) {
+      timed_out = 1U;
+      last = now;
     } else {
-      timeout = osWaitForever;
-      flags   = osFlagsErrorTimeout;
+      return;
     }
-    if (TransferBusy == 0U) {
-      count = GetTraceCount();
-      if (count != 0U) {
-        index = TraceIndexO & (SWO_BUFFER_SIZE - 1U);
-        n = SWO_BUFFER_SIZE - index;
-        if (count > n) {
-          count = n;
-        }
-        if (flags != osFlagsErrorTimeout) {
-          i = index & (USB_BLOCK_SIZE - 1U);
-          if (i == 0U) {
-            count &= ~(USB_BLOCK_SIZE - 1U);
+  } else {
+    if (flags == 0U) {
+      return;
+    }
+    timed_out = 1U;
+  }
+
+  if (TransferBusy == 0U) {
+    count = GetTraceCount();
+    if (count != 0U) {
+      index = TraceIndexO & (SWO_BUFFER_SIZE - 1U);
+      n = SWO_BUFFER_SIZE - index;
+      if (count > n) {
+        count = n;
+      }
+      if (timed_out == 0U) {
+        i = index & (USB_BLOCK_SIZE - 1U);
+        if (i == 0U) {
+          count &= ~(USB_BLOCK_SIZE - 1U);
+        } else {
+          n = USB_BLOCK_SIZE - i;
+          if (count >= n) {
+            count = n;
           } else {
-            n = USB_BLOCK_SIZE - i;
-            if (count >= n) {
-              count = n;
-            } else {
-              count = 0U;
-            }
+            count = 0U;
           }
         }
-        if (count != 0U) {
-          TransferSize = count;
-          TransferBusy = 1U;
-          SWO_QueueTransfer(&TraceBuf[index], count);
-        }
+      }
+      if (count != 0U) {
+        TransferSize = count;
+        TransferBusy = 1U;
+        SWO_QueueTransfer(&TraceBuf[index], count);
       }
     }
   }

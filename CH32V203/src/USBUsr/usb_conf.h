@@ -22,14 +22,18 @@
 
 /* EP0  */
 /* rx/tx buffer base address */
-#define ENDP0_RXADDR        (0x40)
-#define ENDP0_TXADDR        (0x80)
+/* Packet memory (512 B). The buffer table needs 8 bytes per endpoint used (EP0..EP4 = 0x28), so the buffers start right
+ * after it; the CDC interrupt endpoint only needs 8 bytes. This leaves room for the SWO streaming endpoint (EP4, 64 B):
+ *   0x28 EP0 rx | 0x68 EP0 tx | 0xA8 EP1 tx | 0xE8 EP1 rx | 0x128 EP2 tx (8) | 0x130 EP3 tx | 0x170 EP3 rx | 0x1B0 EP4 tx -> 0x1F0 */
+#define ENDP0_RXADDR        (0x28)
+#define ENDP0_TXADDR        (ENDP0_RXADDR + 0x40)
 
-#define ENDP1_TXADDR        (0xC0)
+#define ENDP1_TXADDR        (ENDP0_TXADDR + 0x40)
 #define ENDP1_RXADDR        (ENDP1_TXADDR + 0x40)
 #define ENDP2_TXADDR        (ENDP1_RXADDR + 0x40)
-#define ENDP3_TXADDR        (ENDP2_TXADDR + 0x40)
+#define ENDP3_TXADDR        (ENDP2_TXADDR + 0x08)
 #define ENDP3_RXADDR        (ENDP3_TXADDR + 0x40)
+#define ENDP4_TXADDR        (ENDP3_RXADDR + 0x40)
 
 
 /* ISTR events */
@@ -54,7 +58,10 @@
 // #define  EP1_IN_Callback   NOP_Process
 // #define  EP2_IN_Callback   NOP_Process
 // #define  EP3_IN_Callback   NOP_Process
+#include "swo_ep_config.h"
+#if (SWO_EP_ENABLED == 0)
 #define  EP4_IN_Callback   NOP_Process
+#endif
 #define  EP5_IN_Callback   NOP_Process
 #define  EP6_IN_Callback   NOP_Process
 #define  EP7_IN_Callback   NOP_Process
