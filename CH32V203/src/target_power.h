@@ -8,6 +8,9 @@
  * reads the rail voltage at the header (probe or target supplied), not "target has its own supply". */
 uint16_t target_vtref_mv(void);
 
+/* Diagnostics for bring-up: fills 6 bytes (stage, ADC STATR, CTLR2 x3, CTLR1 top byte), returns 6. */
+uint8_t target_vtref_diag(uint8_t *out);
+
 #define VTREF_MV_PRESENT_MIN  1700U     /* nRF54L15 minimum VDD */
 #define VTREF_MV_ERROR        0xFFFFU
 

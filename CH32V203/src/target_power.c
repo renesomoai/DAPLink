@@ -10,6 +10,18 @@
 #define OVERSAMPLE       8U
 
 static uint8_t adc_ready;
+static uint8_t diag_stage;                /* 0 ok, 1 reset-calibration timeout, 2 calibration timeout, 3 conversion timeout */
+
+uint8_t target_vtref_diag(uint8_t *out)   /* [stage, ADC STATR lo, CTLR2 byte0, CTLR2 byte1, CTLR2 byte2, CTLR1 byte3] */
+{
+    out[0] = diag_stage;
+    out[1] = (uint8_t)ADC1->STATR;
+    out[2] = (uint8_t)ADC1->CTLR2;
+    out[3] = (uint8_t)(ADC1->CTLR2 >> 8);
+    out[4] = (uint8_t)(ADC1->CTLR2 >> 16);
+    out[5] = (uint8_t)(ADC1->CTLR1 >> 24);
+    return 6;
+}
 
 static int adc_init(void)
 {
@@ -28,6 +40,8 @@ static int adc_init(void)
 
     ADC_DeInit(ADC1);
     ADC_StructInit(&a);
+    a.ADC_OutputBuffer = ADC_OutputBuffer_Disable;    /* NOT set by ADC_StructInit on V20x: stack garbage would be OR-ed into CTLR1 */
+    a.ADC_Pga = ADC_Pga_1;
     a.ADC_Mode = ADC_Mode_Independent;
     a.ADC_ScanConvMode = DISABLE;
     a.ADC_ContinuousConvMode = DISABLE;
@@ -40,9 +54,10 @@ static int adc_init(void)
 
     ADC_ResetCalibration(ADC1);
     for (n = ADC_WAIT_LOOPS; ADC_GetResetCalibrationStatus(ADC1) && n; n--) {}
-    if (!n) { return 0; }
+    if (!n) { diag_stage = 1; return 0; }
     ADC_StartCalibration(ADC1);
     for (n = ADC_WAIT_LOOPS; ADC_GetCalibrationStatus(ADC1) && n; n--) {}
+    if (!n) { diag_stage = 2; }
     return n != 0;
 }
 
@@ -57,8 +72,9 @@ uint16_t target_vtref_mv(void)
     for (i = 0; i < OVERSAMPLE; i++) {
         ADC_SoftwareStartConvCmd(ADC1, ENABLE);
         for (n = ADC_WAIT_LOOPS; !ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) && n; n--) {}
-        if (!n) { return VTREF_MV_ERROR; }
+        if (!n) { diag_stage = 3; return VTREF_MV_ERROR; }
         sum += ADC_GetConversionValue(ADC1);           /* reading DR clears EOC */
     }
+    diag_stage = 0;
     return (uint16_t)((sum * VDDA_MV * DIVIDER_RATIO) / (OVERSAMPLE * 4095U));
 }

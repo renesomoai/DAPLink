@@ -61,6 +61,7 @@ uint32_t DAP_ProcessVendorCommand(const uint8_t *request, uint8_t *response) {
       *response++ = (uint8_t)mv;
       *response++ = (uint8_t)(mv >> 8);
       num += 3U;
+      num += target_vtref_diag(response);   // bring-up diagnostics follow the 3 bytes (stage, ADC regs)
       break;
     }
 #else
