@@ -30,6 +30,9 @@
 #ifdef DAP_VTREF_SENSE
 #include "target_power.h"
 #endif
+#ifdef DAP_STATS
+#include "dap_xfer.h"
+#endif
 
 //**************************************************************************************************
 /** 
@@ -69,7 +72,15 @@ uint32_t DAP_ProcessVendorCommand(const uint8_t *request, uint8_t *response) {
 #endif
 
 
+#ifdef DAP_STATS
+    case ID_DAP_Vendor1:         // request [0x81, op]: op 0 = reset counters, op 1 = read (response: 5 x u32 LE, see dap_xfer.c)
+      num += 1U << 16;
+      if (*request == 0U) { dap_stats_reset(); }
+      else { num += dap_stats_get(response); }
+      break;
+#else
     case ID_DAP_Vendor1:  break;
+#endif
     case ID_DAP_Vendor2:  break;
     case ID_DAP_Vendor3:  break;
     case ID_DAP_Vendor4:  break;

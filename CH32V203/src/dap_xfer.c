@@ -3,6 +3,20 @@
 #include "DAP.h"
 #include "dap_xfer.h"
 
+/* ---- DAP processing statistics (bring-up instrumentation, vendor command 0x81) ------------------------------ */
+#ifdef DAP_STATS
+extern uint32_t TIMESTAMP_GET(void);
+static struct { uint64_t busy; uint32_t cmds, maxc, blocks, t0; } st;
+void dap_stats_reset(void) { st.busy = 0; st.cmds = 0; st.maxc = 0; st.blocks = 0; st.t0 = TIMESTAMP_GET(); }
+/* out: busy cycles, wall cycles since reset, commands, longest command (cycles), TransferBlock commands: 5 x u32 LE */
+uint32_t dap_stats_get(uint8_t *out) {
+    uint32_t v[5], i;
+    v[0] = (uint32_t)st.busy; v[1] = TIMESTAMP_GET() - st.t0; v[2] = st.cmds; v[3] = st.maxc; v[4] = st.blocks;
+    for (i = 0; i < 5U; i++) { out[4*i] = (uint8_t)v[i]; out[4*i+1] = (uint8_t)(v[i] >> 8); out[4*i+2] = (uint8_t)(v[i] >> 16); out[4*i+3] = (uint8_t)(v[i] >> 24); }
+    return 20U;
+}
+#endif
+
 #define NSLOT   DAP_PACKET_COUNT
 #define SSIZE   DAP_PACKET_SIZE
 #define MPS     DAP_XFER_MPS
@@ -293,7 +307,17 @@ uint32_t dap_xfer_process(void) {
         rl = 2U;
         dap_xfer_stats.rejected++;
     } else {
+#ifdef DAP_STATS
+        uint32_t t_begin = TIMESTAMP_GET();
+#endif
         r = DAP_ProcessCommand(rq, rs);
+#ifdef DAP_STATS
+        if ((rq[0] != 0x81U) && (rq[0] != 0x80U)) {          /* do not count the instrumentation commands themselves */
+            uint32_t d = TIMESTAMP_GET() - t_begin;
+            st.busy += d; st.cmds++; if (d > st.maxc) { st.maxc = d; }
+            if (rq[0] == ID_DAP_TransferBlock) { st.blocks++; }
+        }
+#endif
         rl = r & 0xFFFFU;
         /* Commands the build does not implement (e.g. SWO with SWO_UART=0) are answered with ID_DAP_Invalid and
          * consume one byte in DAP.c; only count real disagreements. */

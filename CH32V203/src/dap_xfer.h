@@ -45,6 +45,10 @@ void dap_rx_feed(const uint8_t *pkt, uint32_t n);
 /* Execute one queued request and queue its response. Returns 1 if a request was processed. Main loop. */
 uint32_t dap_xfer_process(void);
 
+/* Bring-up statistics (build with DAP_STATS): see dap_xfer.c. */
+void dap_stats_reset(void);
+uint32_t dap_stats_get(uint8_t *out);
+
 /* Next USB IN packet: returns its length (0 = ZLP) and sets *ptr, or -1 if nothing is pending.
  * Call when idle (with interrupts masked) and from every IN-complete event. */
 int32_t dap_tx_next(const uint8_t **ptr);

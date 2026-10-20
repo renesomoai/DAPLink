@@ -332,6 +332,7 @@ of the same I/O port. The following SWDIO I/O Pin functions are provided:
 #define LED_CONNECTED_PIN   GPIO_Pin_10
 #define LED_RUNNING_PORT    GPIOB
 #define LED_RUNNING_PIN     GPIO_Pin_11
+#define DAP_STATS           1   /* vendor command 0x81: busy/wall cycle counters of the DAP command loop (bring-up) */
 #define DAP_VTREF_SENSE     1   /* vendor command 0x80 reads VTREF on PB1 (ADC1_IN9), see target_power.c */
 
 /** Setup JTAG I/O pins: TCK, TMS, TDI, TDO, nTRST, and nRESET.
