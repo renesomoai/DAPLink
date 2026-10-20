@@ -151,7 +151,8 @@ uint32_t dap_response_bound(const uint8_t *r, uint32_t len) {
             if (len < 3U) { return 0xFFFFU; }
             n = r[2];
             pos = 3U;
-            bound = 3U + 4U;                                  /* header + final posted read */
+            bound = 3U;                                       /* header; each read answers exactly one value (the posted one comes from RDBUFF), */
+                                                              /* match-value reads answer none: so 3 + 4*reads is a tight upper bound */
             for (i = 0U; i < n; i++) {
                 if (pos >= len) { return 0xFFFFU; }
                 info = r[pos++];
