@@ -10,6 +10,7 @@ void bootloader_request(uint8_t variant);
 void bootloader_poll(void);                  /* call from the main loop */
 
 #define BOOTLOADER_VARIANT_BOOTMODE  0       /* FLASH BOOT_MODE bit (unlocked with BOOT_MODEKEYR) + system reset */
-#define BOOTLOADER_VARIANT_JUMP      1       /* clean peripherals, jump to the system bootloader at 0x1FFF8000 */
+#define BOOTLOADER_VARIANT_JUMP      1       /* switch back to the reset clock/IRQ state, jump to the system bootloader at 0x1FFF8000 */
+#define BOOTLOADER_VARIANT_ERASE0    2       /* erase the application's first flash page, reset: the ROM stays in ISP mode */
 
 #endif

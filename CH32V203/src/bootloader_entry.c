@@ -9,6 +9,8 @@
  */
 #include "ch32v20x.h"
 #include "bootloader_entry.h"
+#include "ch32v20x_rcc.h"
+#include "ch32v20x_flash.h"
 
 extern volatile uint32_t SysTick_ms;
 extern void USB_Port_Set(FunctionalState NewState, FunctionalState Pin_In_IPU);
@@ -37,6 +39,15 @@ static void spin_ms(uint32_t ms)
     while (n--) { }
 }
 
+static void quiesce(void)
+{
+    uint32_t i;
+    SysTick->CTLR = 0;
+    for (i = 0; i < 8U; i++) { NVIC->IRER[i] = 0xFFFFFFFFUL; }   /* every PFIC interrupt off */
+    RCC_DeInit();                                                /* back to HSI, PLL/HSE off: the ROM expects reset clocks */
+    FLASH->ACTLR = 0;                                            /* default flash wait states for the slow clock */
+}
+
 static void enter_bootloader(uint8_t variant)
 {
     __disable_irq();
@@ -44,13 +55,24 @@ static void enter_bootloader(uint8_t variant)
     spin_ms(30U);
 
     if (variant == BOOTLOADER_VARIANT_JUMP) {
+        quiesce();
         RCC->APB1PRSTR = 0xFFFFFFFFUL; RCC->APB1PRSTR = 0;     /* peripheral resets (USB, USART2, timers...) */
         RCC->APB2PRSTR = 0xFFFFFFFFUL; RCC->APB2PRSTR = 0;
+        __asm volatile("csrw 0x804, zero");                    /* INTSYSCR: hardware stacking/nesting off, as after reset */
         ((void (*)(void))SYSTEM_BOOTLOADER)();
         for (;;) { }
     }
 
-    FLASH_BOOT_MODEKEYR = KEY1;
+    if (variant == BOOTLOADER_VARIANT_ERASE0) {
+        /* Invalidate the application's first flash page so the ROM does not start it, then reset: the ROM stays in ISP.
+         * The next flash writes the whole application again. Recovery if this does not work: BOOT button. */
+        FLASH_Unlock_Fast();
+        FLASH_ErasePage_Fast(0x08000000UL);
+        NVIC_SystemReset();
+        for (;;) { }
+    }
+
+    FLASH_BOOT_MODEKEYR = KEY1;                                /* variant 0: does NOT work on the CH32V203 (tested) */
     FLASH_BOOT_MODEKEYR = KEY2;
     FLASH->STATR |= FLASH_STATR_BOOT_MODE;
     NVIC_SystemReset();
