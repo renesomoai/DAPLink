@@ -4,6 +4,7 @@
 #include "usb_regs.h"
 #include "usb_desc.h"
 #include "vcom_serial.h"
+#include "bootloader_entry.h"
 
 
 volatile VCOM Vcom;
@@ -82,6 +83,10 @@ void VCOM_Init(void)
 void VCOM_LineCoding(VCOM_LINE_CODING * LineCfgx)
 {
     USART_InitTypeDef USART_InitStructure;
+
+    if (LineCfgx->u32DTERate == 1200U) {                 /* 1200-baud touch: reboot into the WCH bootloader (see bootloader_entry.c) */
+        bootloader_request(BOOTLOADER_VARIANT_BOOTMODE);
+    }
     
     switch(LineCfgx->u8DataBits)
     {
