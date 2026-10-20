@@ -33,9 +33,6 @@
 #ifdef DAP_STATS
 #include "dap_xfer.h"
 #endif
-#ifdef DAP_BOOTLOADER_ENTRY
-#include "bootloader_entry.h"
-#endif
 
 //**************************************************************************************************
 /** 
@@ -84,14 +81,7 @@ uint32_t DAP_ProcessVendorCommand(const uint8_t *request, uint8_t *response) {
 #else
     case ID_DAP_Vendor1:  break;
 #endif
-#ifdef DAP_BOOTLOADER_ENTRY
-    case ID_DAP_Vendor2:         // request [0x82, variant]: reboot into the WCH ISP bootloader ~100 ms after the response
-      num += 1U << 16;
-      bootloader_request(*request);
-      break;
-#else
     case ID_DAP_Vendor2:  break;
-#endif
     case ID_DAP_Vendor3:  break;
     case ID_DAP_Vendor4:  break;
     case ID_DAP_Vendor5:  break;
