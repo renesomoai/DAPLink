@@ -32,6 +32,7 @@
 #endif
 #ifdef DAP_STATS
 #include "dap_xfer.h"
+#include "vcom_serial.h"
 #endif
 
 //**************************************************************************************************
@@ -76,6 +77,7 @@ uint32_t DAP_ProcessVendorCommand(const uint8_t *request, uint8_t *response) {
     case ID_DAP_Vendor1:         // request [0x81, op]: op 0 = reset counters, op 1 = read (response: 5 x u32 LE, see dap_xfer.c)
       num += 1U << 16;
       if (*request == 0U) { dap_stats_reset(); }
+      else if (*request == 2U) { num += vcom_stats_get(response); }   // CDC: RX bytes delivered, RX bytes lost
       else { num += dap_stats_get(response); }
       break;
 #else

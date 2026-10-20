@@ -36,6 +36,7 @@ extern VCOM_LINE_CODING LineCfg;
 
 void VCOM_Init(void);
 void VCOM_TransferData(void);
+uint32_t vcom_stats_get(uint8_t *out);          /* 8 bytes: RX bytes delivered, RX bytes lost (overrun) */
 void VCOM_LineCoding(VCOM_LINE_CODING * LineCfgx);
 
 

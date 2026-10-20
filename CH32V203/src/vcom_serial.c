@@ -4,14 +4,23 @@
 #include "usb_regs.h"
 #include "usb_desc.h"
 #include "vcom_serial.h"
+#include "irq_attr.h"
 
 
 volatile VCOM Vcom;
 
+static volatile uint32_t rx_wraps;           /* completed laps of the circular RX DMA (DMA TC interrupt) */
+static uint32_t rx_consumed;                 /* total bytes handed to USB (monotonic) */
+uint32_t vcom_rx_overruns;                   /* bytes lost because the ring was not drained in time */
+uint32_t vcom_rx_total;                      /* bytes delivered to the host */
+
 VCOM_LINE_CODING LineCfg = {115200, 0, 0, 8};   // Baud rate, stop bits, parity bits, data bits
 
 
-#define RXDMA_SZ  (CDC_BULK_IN_SZ * 2)
+/* RX ring: USART2 -> DMA (circular). It is drained from the main loop, which a DAP command can occupy for several ms
+ * (measured on hardware: 1.4-6 ms at 1-8 MHz SWCLK, more at slow clocks); the old 128-byte ring overran at 921600 baud
+ * whenever the DAP was busy. 2 KB gives 22 ms of headroom at 921600 baud and 178 ms at 115200. */
+#define RXDMA_SZ  2048U
 uint8_t RXBuffer[RXDMA_SZ] __attribute__((aligned(4)));
 uint8_t TXBuffer[CDC_BULK_OUT_SZ] __attribute__((aligned(4)));
 
@@ -62,7 +71,16 @@ void VCOM_Init(void)
     DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
     DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
     DMA_Init(DMA1_Channel6, &DMA_InitStructure);
+    DMA_ITConfig(DMA1_Channel6, DMA_IT_TC, ENABLE);
     DMA_Cmd(DMA1_Channel6, ENABLE);
+    {
+        NVIC_InitTypeDef nvic;
+        nvic.NVIC_IRQChannel = DMA1_Channel6_IRQn;
+        nvic.NVIC_IRQChannelPreemptionPriority = 0;
+        nvic.NVIC_IRQChannelSubPriority = 0;
+        nvic.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_Init(&nvic);
+    }
 
 
     USART_InitStructure.USART_BaudRate = 115200;
@@ -122,42 +140,83 @@ void VCOM_LineCoding(VCOM_LINE_CODING * LineCfgx)
 
 extern volatile uint32_t SysTick_ms;
 
+/* Total bytes the DMA has written since start (monotonic), consistent with the wrap counter. */
+static uint32_t rx_total_written(void)
+{
+    uint32_t w, pos;
+
+    __disable_irq();
+    w = rx_wraps;
+    pos = RXDMA_SZ - DMA_GetCurrDataCounter(DMA1_Channel6);
+    if (DMA1->INTFR & DMA1_IT_TC6) {          /* lap finished, its interrupt is still pending (IRQs are masked here) */
+        w++;
+        pos = RXDMA_SZ - DMA_GetCurrDataCounter(DMA1_Channel6);
+    }
+    __enable_irq();
+    return w * RXDMA_SZ + pos;
+}
+
+void DMA1_Channel6_IRQHandler(void) WCH_IRQ_FAST;
+void DMA1_Channel6_IRQHandler(void)
+{
+    rx_wraps++;
+    DMA1->INTFCR = DMA1_IT_GL6;
+}
+
+uint32_t vcom_stats_get(uint8_t *out)
+{
+    uint32_t v[2], i;
+    v[0] = vcom_rx_total; v[1] = vcom_rx_overruns;
+    for (i = 0; i < 2U; i++) { out[4*i] = (uint8_t)v[i]; out[4*i+1] = (uint8_t)(v[i] >> 8); out[4*i+2] = (uint8_t)(v[i] >> 16); out[4*i+3] = (uint8_t)(v[i] >> 24); }
+    return 8U;
+}
+
 void VCOM_TransferData(void)
 {
     static uint32_t last_ms = 0;
-    static uint32_t last_pos = 0;
 
-    if(GetEPTxStatus(ENDP3) == EP_TX_NAK)   // 可以向主机发送数据
+    if(GetEPTxStatus(ENDP3) == EP_TX_NAK)
     {
-        uint32_t pos = RXDMA_SZ - DMA_GetCurrDataCounter(DMA1_Channel6);
-        if((pos - last_pos >= CDC_BULK_IN_SZ) || ((pos != last_pos) && (SysTick_ms != last_ms)))
+        uint32_t total = rx_total_written();
+        uint32_t avail = total - rx_consumed;
+
+        if (avail > RXDMA_SZ - CDC_BULK_IN_SZ)    /* the DMA is about to lap data that was not sent yet: drop the oldest, count it */
         {
-            if(pos < last_pos)
-                pos = RXDMA_SZ;
-
-            if(pos - last_pos > CDC_BULK_IN_SZ)
-                pos = last_pos + CDC_BULK_IN_SZ;
-
-            Vcom.in_bytes = pos - last_pos;
-
-            USB_SIL_Write(EP3_IN, &RXBuffer[last_pos], Vcom.in_bytes);
-            SetEPTxValid(ENDP3);
-
-            last_pos = pos % RXDMA_SZ;
-
-            last_ms = SysTick_ms;
+            uint32_t drop = avail - (RXDMA_SZ - CDC_BULK_IN_SZ);
+            rx_consumed += drop;
+            vcom_rx_overruns += drop;
+            avail -= drop;
         }
-        else
-        {
-            /* Prepare a zero packet if previous packet size is CDC_BULK_IN_SZ and
-               no more data to send at this moment to note Host the transfer has been done */
-            if(Vcom.in_bytes == CDC_BULK_IN_SZ)
-			{
-				Vcom.in_bytes = 0;
 
-				USB_SIL_Write(EP3_IN, (uint8_t *)0, 0);
-				SetEPTxValid(ENDP3);
-			}
+        {
+            uint32_t idx = rx_consumed % RXDMA_SZ;
+            uint32_t n = avail;
+            if (n > CDC_BULK_IN_SZ)    n = CDC_BULK_IN_SZ;
+            if (n > RXDMA_SZ - idx)    n = RXDMA_SZ - idx;     /* one contiguous piece per packet */
+
+            if((n >= CDC_BULK_IN_SZ) || ((n != 0U) && (SysTick_ms != last_ms)))
+            {
+                Vcom.in_bytes = n;
+
+                USB_SIL_Write(EP3_IN, &RXBuffer[idx], n);
+                SetEPTxValid(ENDP3);
+
+                rx_consumed += n;
+                vcom_rx_total += n;
+                last_ms = SysTick_ms;
+            }
+            else
+            {
+                /* Prepare a zero packet if previous packet size is CDC_BULK_IN_SZ and
+                   no more data to send at this moment to note Host the transfer has been done */
+                if(Vcom.in_bytes == CDC_BULK_IN_SZ)
+                {
+                    Vcom.in_bytes = 0;
+
+                    USB_SIL_Write(EP3_IN, (uint8_t *)0, 0);
+                    SetEPTxValid(ENDP3);
+                }
+            }
         }
     }
 
